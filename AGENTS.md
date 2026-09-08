@@ -1,6 +1,6 @@
-# Working on Ixis
+# Working on Praxis
 
-Ixis routes human attention between agents through hands and voice. Read [VISION.md](VISION.md) for product intent and non-goals. Preserve the distinction between a recognized gesture, a semantic intent, and an attempted macOS action.
+Praxis routes human attention between agents through hands and voice. Read [VISION.md](VISION.md) for product intent and non-goals. Preserve the distinction between a recognized gesture, a semantic intent, and an attempted macOS action.
 
 ## Context
 

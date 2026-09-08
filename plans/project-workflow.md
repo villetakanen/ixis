@@ -133,7 +133,7 @@ Pending choices: minimum macOS version, signing/team identity, initial distribut
 
 ## ASDLC grounding
 
-Read on 2026-09-08. The pages below ground the approach; the concrete Ixis agent roles, file layout, lifecycle labels, commands, and version policy above are project proposals, not claimed ASDLC requirements.
+Read on 2026-09-08. The pages below ground the approach; the concrete Praxis agent roles, file layout, lifecycle labels, commands, and version policy above are project proposals, not claimed ASDLC requirements.
 
 - [Getting started](https://asdlc.io/getting-started/): durable specs and bounded changes.
 - [Living specs](https://asdlc.io/practices/living-specs/): Blueprint/Contract organization and refinement alongside implementation.

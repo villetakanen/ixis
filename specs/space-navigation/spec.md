@@ -11,7 +11,7 @@ verification: not-run
 
 ### Context
 
-Ixis must establish that a semantic navigation intent can produce a useful macOS action before adding camera recognition. This first slice uses Previous Space and Next Space buttons in a debug window to exercise the same intent boundary a future gesture recognizer will use.
+Praxis must establish that a semantic navigation intent can produce a useful macOS action before adding camera recognition. This first slice uses Previous Space and Next Space buttons in a debug window to exercise the same intent boundary a future gesture recognizer will use.
 
 Scope: app shell, explicit action enablement, shortcut setup, event-posting permission, and observable action attempts. Camera, gestures, speech, window selection, and Return submission belong to later slices. See [vision](../../VISION.md) and [scaffold plan](../../plans/initial-scaffold.md).
 
@@ -26,7 +26,7 @@ Proposed ownership; source paths will be recorded when the scaffold exists:
 
 The shortcut mapping contains a key code and modifier set for each direction. Display the proposed Control–Left/Right defaults, but require the user to confirm they match enabled Mission Control shortcuts before execution. Provide a minimal way to enter a different mapping when defaults do not match. No automatic reading of undocumented system shortcut stores or changes to system settings.
 
-Confirmation lasts for the app session. Reset it when an Ixis mapping changes. Explain that changes made in System Settings require rechecking the mapping; Ixis does not claim to monitor those settings. Action execution starts disabled on every launch.
+Confirmation lasts for the app session. Reset it when a Praxis mapping changes. Explain that changes made in System Settings require rechecking the mapping; Praxis does not claim to monitor those settings. Action execution starts disabled on every launch.
 
 ### Action result
 
@@ -36,7 +36,7 @@ Each request produces a record containing a request identifier, direction, times
 - `failed(reason)`: required events could not be constructed. Nothing is posted; prepare the complete pair before posting either event.
 - `posted`: one navigation key-down/key-up pair was handed to the posting API with the configured modifiers. This is not an acknowledgement from Mission Control.
 
-Show the latest result and a bounded history of 50 records with the oldest discarded first. Surface the reason and a relevant recovery action for blocked/failed outcomes. Use “Shortcut posted” for the posted state; never “Space changed.” Timing measures Ixis processing only, not the macOS transition.
+Show the latest result and a bounded history of 50 records with the oldest discarded first. Surface the reason and a relevant recovery action for blocked/failed outcomes. Use “Shortcut posted” for the posted state; never “Space changed.” Timing measures Praxis processing only, not the macOS transition.
 
 ### Constraints
 
@@ -127,7 +127,7 @@ Given a working candidate, when event-posting access is revoked and a new reques
 
 Evidence: interactive macOS characterization.
 
-Given a first/last Space, a full-screen Space, or multiple displays, when each direction is requested in turn, then record the observed effect and relevant Mission Control settings. Ixis reports only the posting result, including when the OS makes no transition. Test a deliberately mismatched/disabled system shortcut as well: a posted record must not become a claim of successful navigation. Restore the tester's settings after the experiment.
+Given a first/last Space, a full-screen Space, or multiple displays, when each direction is requested in turn, then record the observed effect and relevant Mission Control settings. Praxis reports only the posting result, including when the OS makes no transition. Test a deliberately mismatched/disabled system shortcut as well: a posted record must not become a claim of successful navigation. Restore the tester's settings after the experiment.
 
 ## Evidence
 

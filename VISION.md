@@ -1,8 +1,10 @@
-# Ixis — Project Brief
+# Praxis
+
+> Intent into action.
 
 ## What we are building
 
-Ixis is an experimental macOS interaction layer for working with multiple AI agents.
+Praxis lets you conduct agents with your hands and voice. It is an experimental macOS interaction layer for working with multiple AI agents.
 
 The core idea is not "gesture control for macOS" and explicitly not air-mouse emulation.
 
@@ -17,11 +19,11 @@ The primary use case is a user working with several agent interfaces simultaneou
 Rather than moving a mouse between them:
 
 1. Gesture toward / navigate to an agent window.
-2. Ixis focuses that window.
+2. Praxis focuses that window.
 3. Speak naturally.
 4. macOS speech-to-text enters the instruction into the focused application.
 5. Perform a commit gesture.
-6. Ixis sends Enter / Return.
+6. Praxis sends Enter / Return.
 7. Gesture to another agent/window and continue.
 
 The Minority Report inspiration is deliberate, but the goal is a genuinely useful interaction model rather than visual theatrics.
@@ -45,7 +47,7 @@ A user may have several semi-autonomous agents working simultaneously. Mouse-and
 - submit
 - switch context
 
-Ixis explores whether this can instead become:
+Praxis explores whether this can instead become:
 
     LOOK / GESTURE → SPEAK → COMMIT
 
@@ -148,9 +150,9 @@ This lets us completely change the gesture vocabulary later without rewriting ma
 
 # Suggested project structure
 
-    Ixis/
+    Praxis/
     ├── App/
-    │   ├── IxisApp.swift
+    │   ├── PraxisApp.swift
     │   └── AppState.swift
     │
     ├── Camera/
@@ -228,19 +230,19 @@ The exact commit gesture should be easy, fast and extremely difficult to trigger
 
 # Speech
 
-Speech should NOT initially be an AI feature of Ixis.
+Speech should NOT initially be an AI feature of Praxis.
 
 Do not build:
 
     speech → LLM → intent classification
 
-Ixis should preferably use native macOS speech/dictation capabilities to enter text into the currently selected application.
+Praxis should preferably use native macOS speech/dictation capabilities to enter text into the currently selected application.
 
 The target application owns the conversation.
 
 For example:
 
-    Ixis focuses Claude
+    Praxis focuses Claude
             ↓
     user dictates
             ↓
@@ -248,7 +250,7 @@ For example:
             ↓
     commit gesture
             ↓
-    Ixis sends Return
+    Praxis sends Return
 
 Then:
 
@@ -260,7 +262,7 @@ Then:
             ↓
     gesture → commit
 
-Ixis is therefore a ROUTER of human attention, not another agent sitting between the human and their agents.
+Praxis is therefore a ROUTER of human attention, not another agent sitting between the human and their agents.
 
 
 # Window selection
@@ -399,11 +401,11 @@ This will be essential for tuning the interaction.
 
 # Menu bar application
 
-Ixis should normally run as a menu bar utility.
+Praxis should normally run as a menu bar utility.
 
 Menu should provide roughly:
 
-    Ixis
+    Praxis
     ─────────────
     ● Gesture Control
     ● Dictation
@@ -531,7 +533,7 @@ Prove the complete interaction:
         ↓
     commit
 
-At this point we can evaluate whether Ixis actually changes the experience of working with multiple agents.
+At this point we can evaluate whether Praxis actually changes the experience of working with multiple agents.
 
 
 # Engineering approach
