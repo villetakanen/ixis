@@ -1,6 +1,6 @@
 # Project workflow proposal
 
-Status: draft for discussion; this document does not install agents or CI gates.
+Status: initial spec, development, and test workflow adopted. Version/release policy remains proposed. Agent configurations and CI gates are not installed.
 Date: 2026-09-08
 
 ## Operating model
@@ -14,7 +14,7 @@ The scaffold sequence is in [initial-scaffold.md](initial-scaffold.md); product 
 | Artifact | Owns |
 | --- | --- |
 | `VISION.md` | Product intent, taste, non-goals |
-| `AGENTS.md` | Short navigation and persistent project judgment; add when adopting this workflow |
+| `AGENTS.md` | Short navigation and persistent project judgment |
 | `ARCHITECTURE.md` | Established system boundaries and toolchain decisions |
 | `specs/<capability>/spec.md` | Lasting behavior and verification contract |
 | GitHub issue | Bounded change, linked spec clauses, completion evidence |
@@ -34,7 +34,7 @@ Use GitHub issues as the work-item source of truth once implementation starts. A
 5. Have a fresh critic check ambiguity, contradictory requirements, and whether each claim can actually be verified. Resolve product choices with the human; resolve routine implementation details within the accepted scope.
 6. Implement against the spec. Commit discovered behavior changes with the corresponding spec changes. A bug fix restoring existing behavior need not rewrite the contract.
 
-Proposed spec lifecycle: `draft` → `active` → `deprecated`. Draft can guide a bounded spike; active means the contract governs implementation, not that implementation is complete. Record implementation and evidence status separately.
+Spec lifecycle: `draft` → `active` → `deprecated`. Draft can guide a bounded spike; active means the contract governs implementation, not that implementation is complete. Record implementation and evidence status separately.
 
 Start with `specs/space-navigation/spec.md` for button → intent → action attempt. Add `specs/hand-observation/spec.md` and `specs/swipe-recognition/spec.md` as those slices begin. Specify debug observability within these contracts until it needs independent evolution. Do not pre-author the speech/window milestones.
 
@@ -119,6 +119,8 @@ Prepare notes, artifact, and a draft release first. When publication is authoriz
 The release agent cannot waive missing tests, infer human experience acceptance, or edit application behavior to make a release pass. A failed gate returns the work to the owning flow.
 
 ## Adoption sequence
+
+The initial repository instructions, [spec template](../specs/TEMPLATE.md), and [Space-navigation contract](../specs/space-navigation/spec.md) are now recorded. The first implementation work item and executable scaffold are next; no runtime verification has occurred.
 
 1. Agree the workflow boundaries and first experiment; add a minimal `AGENTS.md` and spec template.
 2. Write the Space-navigation spec and first bounded work item.
