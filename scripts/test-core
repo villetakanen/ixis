@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Run the pure Swift PraxisCore tests (Swift Testing). Extra arguments go to
+# `swift test` (for example: scripts/test-core --filter BoundedHistory).
+#
+# With full Xcode, SwiftPM locates Swift Testing on its own. With the Command
+# Line Tools only, the framework ships at
+# <developer dir>/Library/Developer/Frameworks but SwiftPM 6.3 does not add it
+# to the search path, so this script passes the framework and rpath flags
+# itself. See ARCHITECTURE.md, "Toolchain".
+source "$(dirname "$0")/lib/toolchain.sh"
+
+praxis_select_toolchain
+
+developer_dir="$(xcode-select -p)"
+extra_args=()
+if [[ -d "$developer_dir/Platforms" ]]; then
+    : # Full Xcode: Swift Testing is found automatically.
+else
+    frameworks_dir="$developer_dir/Library/Developer/Frameworks"
+    interop_dir="$developer_dir/Library/Developer/usr/lib"
+    [[ -d "$frameworks_dir/Testing.framework" ]] \
+        || fail "Swift Testing not found at $frameworks_dir/Testing.framework. Install a newer Command Line Tools or Xcode, or set PRAXIS_DEVELOPER_DIR."
+    [[ -f "$interop_dir/lib_TestingInterop.dylib" ]] \
+        || fail "lib_TestingInterop.dylib not found at $interop_dir. The Command Line Tools layout differs from the one this script expects."
+    extra_args=(
+        -Xswiftc "-F$frameworks_dir"
+        -Xlinker "-F$frameworks_dir"
+        -Xlinker -rpath -Xlinker "$frameworks_dir"
+        -Xlinker -rpath -Xlinker "$interop_dir"
+    )
+fi
+
+echo "== PraxisCore tests"
+exec xcrun swift test --package-path "$REPO_ROOT/Packages/PraxisCore" \
+    --disable-xctest --enable-swift-testing ${extra_args[@]+"${extra_args[@]}"} "$@"

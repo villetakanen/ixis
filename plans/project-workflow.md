@@ -69,14 +69,14 @@ Each experiment records commit, app build, hardware, macOS, camera setup, config
 
 The brief's 20–30 observations/second is an initial target. Establish baseline latency and false-activation data before choosing acceptance thresholds; do not fabricate a performance promise. Human acceptance should explicitly say whether the slice is suitable to continue experimenting with.
 
-Proposed command surface, to implement with the scaffold:
+Command surface (`scripts/check`, `scripts/test-core`, `scripts/build-app`, and `scripts/run-app` exist; the rest remain proposed):
 
 - `scripts/check`: available deterministic checks, including pure Swift tests and native app build; fail clearly if a required toolchain is missing.
 - `scripts/test-core`: fast, repeatable gesture-package tests.
 - `scripts/test-app`: app/adapter tests that do not require live desktop control.
 - `scripts/acceptance`: guide or collect an interactive hardware run; never report success without observed outcomes.
 
-These commands do not exist yet. Document exact Swift/Xcode invocations when the targets exist. CI runs headless checks; permission dialogs, camera quality, and actual Space transitions remain explicit interactive evidence. Require the appropriate evidence for the changed capability rather than rerunning unrelated journeys.
+Exact invocations are documented in [ARCHITECTURE.md](../ARCHITECTURE.md). CI runs headless checks; permission dialogs, camera quality, and actual Space transitions remain explicit interactive evidence. Require the appropriate evidence for the changed capability rather than rerunning unrelated journeys.
 
 ## Agent contracts
 
@@ -124,7 +124,7 @@ The initial repository instructions, [spec template](../specs/TEMPLATE.md), and 
 
 1. Agree the workflow boundaries and first experiment; add a minimal `AGENTS.md` and spec template.
 2. Write the Space-navigation spec and first bounded work item.
-3. Establish app identity/toolchain, create the app and package, and implement actual check commands.
+3. Establish app identity/toolchain, create the app and package, and implement actual check commands (Milestone 0 scaffold, in progress).
 4. Run one complete builder → critic → hardware evidence loop manually.
 5. Encode proven checks in CI and review output in a small structured schema.
 6. Add version metadata and release automation when the first useful artifact is ready to distribute.

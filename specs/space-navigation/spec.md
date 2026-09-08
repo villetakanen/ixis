@@ -1,7 +1,7 @@
 ---
 title: Space navigation
 status: active
-implementation: not-started
+implementation: partial
 verification: not-run
 ---
 
@@ -131,7 +131,7 @@ Given a first/last Space, a full-screen Space, or multiple displays, when each d
 
 ## Evidence
 
-All scenarios are not run; there is no implementation. Independent spec review evaluates clarity and verifiability only.
+All scenarios are not run. Implementation is partial: the Milestone 0 scaffold exists (menu bar app, debug window shell, `PraxisCore` with `DesktopIntent`, and `scripts/check`), but no controller, adapter, enablement, shortcut confirmation, permission handling, or event posting is implemented. Menu bar and debug window behavior has not been observed on macOS. Independent spec review evaluates clarity and verifiability only.
 
 For the first hardware run, create `docs/experiments/space-navigation.md` with source SHA, app identity/build, launch path, toolchain, macOS/hardware, display/Space layout, shortcuts, scenario outcomes, and repeat counts. Use 10 deliberate attempts per direction from a valid middle Space for SN-009; record wrong, missed, and duplicate transitions. Passing this probe requires all 20 attempts to produce exactly one transition in the requested direction. This is a baseline protocol, not a statistical reliability claim.
 
@@ -139,7 +139,7 @@ SN-009 and SN-010 must pass on the initial supported development configuration b
 
 ## Open questions
 
-- Minimum macOS version, stable bundle identity, and signing setup: resolve during app scaffolding before hardware permission evidence is gathered.
+- Minimum macOS version (26.0), bundle identity (`com.villetakanen.praxis`), and signing (ad hoc, no identity) are decided in [ARCHITECTURE.md](../../ARCHITECTURE.md). Still open: whether ad-hoc signing forces re-granting event-posting access after each rebuild; resolve during SN-010.
 - Posting location/event-source behavior and any OS-specific limitations: resolve through SN-009–011 using public APIs; revise this spec with findings if the mechanism fails.
 - Space-transition pacing and future gesture cooldown: measure during the probe and later gesture work. This slice does not guarantee that rapid sequential posts each produce a transition.
 

@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Build the Praxis executable with SwiftPM and assemble build/<config>/Praxis.app.
+#
+#   PRAXIS_CONFIGURATION=debug|release   (default: debug)
+#
+# The bundle is ad-hoc signed (no Developer ID is configured). Ad-hoc
+# signatures are tied to the binary contents, so macOS may treat a rebuilt app
+# as a new client when granting privacy permissions. See ARCHITECTURE.md.
+source "$(dirname "$0")/lib/toolchain.sh"
+
+praxis_select_toolchain
+
+configuration="${PRAXIS_CONFIGURATION:-debug}"
+case "$configuration" in
+    debug|release) ;;
+    *) fail "PRAXIS_CONFIGURATION must be debug or release, got '$configuration'." ;;
+esac
+
+app_package="$REPO_ROOT/App"
+info_plist="$app_package/Resources/Info.plist"
+[[ -f "$info_plist" ]] || fail "missing $info_plist"
+
+echo "== Build Praxis ($configuration)"
+xcrun swift build --package-path "$app_package" --configuration "$configuration" --product Praxis
+
+bin_dir="$(xcrun swift build --package-path "$app_package" --configuration "$configuration" --show-bin-path)"
+executable="$bin_dir/Praxis"
+[[ -x "$executable" ]] || fail "expected executable at $executable"
+
+app_dir="$REPO_ROOT/build/$configuration/Praxis.app"
+echo "== Assemble $app_dir"
+rm -rf "$app_dir"
+mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
+cp "$executable" "$app_dir/Contents/MacOS/Praxis"
+cp "$info_plist" "$app_dir/Contents/Info.plist"
+printf 'APPL????' > "$app_dir/Contents/PkgInfo"
+
+plist_bundle_id="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app_dir/Contents/Info.plist")"
+[[ "$plist_bundle_id" == "$PRAXIS_BUNDLE_ID" ]] \
+    || fail "Info.plist bundle identifier '$plist_bundle_id' does not match expected '$PRAXIS_BUNDLE_ID'."
+
+echo "== Sign (ad hoc)"
+codesign --force --sign - "$app_dir"
+codesign --verify --strict "$app_dir"
+
+echo "== Result"
+echo "app:        $app_dir"
+echo "identifier: $plist_bundle_id"
+echo "version:    $(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app_dir/Contents/Info.plist") ($(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$app_dir/Contents/Info.plist"))"
+echo "signature:  $(codesign --display --verbose=2 "$app_dir" 2>&1 | sed -nE 's/^(Identifier|Signature|TeamIdentifier)=(.*)/\1=\2/p' | tr '\n' ' ')"
