@@ -6,13 +6,47 @@ Status: established for Milestone 0 (the button-driven Space-navigation probe). 
 
 | Path | Owns | Depends on |
 | --- | --- | --- |
-| `Packages/PraxisCore/` | Semantic layer: `DesktopIntent` (the boundary type) and `BoundedHistory` (groundwork for the task-2 result history; no consumer yet). Pure Swift; no AppKit, SwiftUI, or CoreGraphics. | Swift standard library, Foundation in tests only |
+| `Packages/PraxisCore/` | Semantic layer and the guarded action controller: `DesktopIntent`, `ShortcutMappings`, `ActionRecord`/`ActionOutcome`, `BoundedHistory`, the boundary protocols, and `SpaceNavigationController`. Pure Swift; no AppKit, SwiftUI, or CoreGraphics. | Swift standard library and Foundation (`Date` only) |
 | `App/` | Native app: menu bar item, debug window, and (from task 2 on) app state and the desktop adapter that turns intents into attempted macOS actions. | `PraxisCore`, SwiftUI, AppKit today; CoreGraphics from task 3 |
 | `App/Resources/Info.plist` | Bundle identity and version metadata. | |
 | `scripts/` | The only supported build, test, and launch entry points. | Toolchain below |
 | `build/<configuration>/Praxis.app` | Assembled, ad-hoc signed app bundle (ignored by Git). | `scripts/build-app` |
 
-Dependency direction is one way: the app imports the core; the core never imports the app or any Apple UI/graphics framework. Recognized input (a button today, a gesture later), semantic intent (`DesktopIntent`), and attempted macOS action (adapter, task 2+) stay separate types.
+Dependency direction is one way: the app imports the core; the core never imports the app or any Apple UI/graphics framework. Recognized input (a button today, a gesture later), semantic intent (`DesktopIntent`), and attempted macOS action (adapter, task 3) stay separate types.
+
+## Space-navigation controller boundary
+
+Established in task 2. The split between package and app is:
+
+| Concern | Owner |
+| --- | --- |
+| Enable flag, mappings, session confirmation and its invalidation, in-progress flag, 50-record history, every eligibility guard, pair construction-before-posting | `SpaceNavigationController` in `PraxisCore` |
+| Shortcut value types (`KeyboardShortcut`, `KeyModifiers`, `ShortcutMappings.proposedDefaults`) and result types (`ActionRecord`, `ActionOutcome`, `BlockReason`, `FailureReason`) | `PraxisCore` |
+| Building and posting real keyboard events (`KeyEventBoundary`), checking event-posting access (`EventPostingAccess`), and time (`TimeSource`) | Protocols in `PraxisCore`; production implementations in the app (task 3, CoreGraphics). `SystemTimeSource` ships in the core. |
+| Display of state and records, persistence of mappings across launches, the explicit permission setup action | App (task 4). The app never re-implements a guard; every request goes through `perform(_:)`. |
+
+Concurrency model: `SpaceNavigationController` is `@MainActor` and `perform(_:)` is synchronous with no suspension point. The main actor therefore serializes requests, and there is no queue: a request that cannot run now is recorded as blocked and dropped. The `isActionInProgress` guard covers the one remaining way a request can arrive mid-pair, re-entrancy from inside the event boundary's `post` (for example UI code reacting to a posted event). The pair is committed once both events are constructed; disabling execution or losing access between key-down and key-up does not stop the key-up. History is ordered by completion, so a re-entrant blocked request is recorded before the pair that was in progress.
+
+Constraint on the adapter (task 3): `KeyEventBoundary.post` must stay synchronous. An awaited gap between key-down and key-up would reintroduce a suspension point and invalidate the serialization argument above; any inter-event pacing must be synchronous, or the guard must be redesigned first.
+
+Confirmation invalidation: `updateMappings` resets confirmation only when the new mappings differ from the current ones (key code or modifiers of either shortcut). Reassigning identical mappings, as an editor may do on every keystroke, keeps the confirmation.
+
+Tests reach the mid-pair state through the recording boundary's synchronous `onPost` hook, which issues the overlapping request, flips enablement or access, or advances the manual clock from inside `post`. No timing delays or production queues exist to make this testable.
+
+Scenario to test mapping (`Packages/PraxisCore/Tests/PraxisCoreTests/SpaceNavigationControllerTests.swift`):
+
+| Scenario | Suite |
+| --- | --- |
+| SN-001 state portion | `LaunchStateTests` |
+| SN-002 | `DisabledOrUnconfirmedTests` |
+| SN-003 | `AccessTests` |
+| SN-004 | `RecoveryTests` |
+| SN-005 | `RoutingTests` (parameterized over default and non-default mappings) |
+| SN-006 | `ConstructionFailureTests` (parameterized over key-down and key-up failure) |
+| SN-007 | `SerializationTests` |
+| SN-008 history portion | `DiagnosticsTests`, plus `BoundedHistoryTests` |
+
+Interactive parts of SN-001 and SN-008 and all of SN-009 to SN-011 are not covered by these tests.
 
 ## Toolchain
 
