@@ -69,7 +69,7 @@ Each experiment records commit, app build, hardware, macOS, camera setup, config
 
 The brief's 20–30 observations/second is an initial target. Establish baseline latency and false-activation data before choosing acceptance thresholds; do not fabricate a performance promise. Human acceptance should explicitly say whether the slice is suitable to continue experimenting with.
 
-Command surface (`scripts/check`, `scripts/test-core`, `scripts/build-app`, and `scripts/run-app` exist; the rest remain proposed):
+Command surface (`scripts/check`, `scripts/test-core`, `scripts/test-app`, `scripts/build-app`, and `scripts/run-app` exist; `scripts/acceptance` remains proposed):
 
 - `scripts/check`: available deterministic checks, including pure Swift tests and native app build; fail clearly if a required toolchain is missing.
 - `scripts/test-core`: fast, repeatable gesture-package tests.

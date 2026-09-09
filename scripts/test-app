@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Run the app/adapter tests in App/ (PraxisDesktop). These construct real
+# CoreGraphics events but post them only to a recording poster; they never
+# send keyboard input or request permissions. Extra arguments go to `swift test`.
+source "$(dirname "$0")/lib/toolchain.sh"
+
+praxis_select_toolchain
+praxis_swift_test_args
+
+echo "== PraxisDesktop tests"
+exec xcrun swift test --package-path "$REPO_ROOT/App" \
+    --disable-xctest --enable-swift-testing ${PRAXIS_SWIFT_TEST_ARGS[@]+"${PRAXIS_SWIFT_TEST_ARGS[@]}"} "$@"

@@ -7,7 +7,9 @@ Status: established for Milestone 0 (the button-driven Space-navigation probe). 
 | Path | Owns | Depends on |
 | --- | --- | --- |
 | `Packages/PraxisCore/` | Semantic layer and the guarded action controller: `DesktopIntent`, `ShortcutMappings`, `ActionRecord`/`ActionOutcome`, `BoundedHistory`, the boundary protocols, and `SpaceNavigationController`. Pure Swift; no AppKit, SwiftUI, or CoreGraphics. | Swift standard library and Foundation (`Date` only) |
-| `App/` | Native app: menu bar item, debug window, and (from task 2 on) app state and the desktop adapter that turns intents into attempted macOS actions. | `PraxisCore`, SwiftUI, AppKit today; CoreGraphics from task 3 |
+| `App/Sources/PraxisDesktop/` | macOS adapters: `CGKeyEventBoundary` (CoreGraphics event construction and posting) and `CGEventPostingAccess` (preflight and explicit request). Library target so it is testable. | `PraxisCore`, CoreGraphics |
+| `App/Sources/Praxis/` | Executable: menu bar item and debug window. App state wiring arrives in task 4. | `PraxisDesktop`, `PraxisCore`, SwiftUI, AppKit |
+| `App/Tests/PraxisDesktopTests/` | Adapter tests: real `CGEvent` construction, posting order at the boundary, access wiring, controller integration. Never post live input. | |
 | `App/Resources/Info.plist` | Bundle identity and version metadata. | |
 | `scripts/` | The only supported build, test, and launch entry points. | Toolchain below |
 | `build/<configuration>/Praxis.app` | Assembled, ad-hoc signed app bundle (ignored by Git). | `scripts/build-app` |
@@ -22,7 +24,7 @@ Established in task 2. The split between package and app is:
 | --- | --- |
 | Enable flag, mappings, session confirmation and its invalidation, in-progress flag, 50-record history, every eligibility guard, pair construction-before-posting | `SpaceNavigationController` in `PraxisCore` |
 | Shortcut value types (`KeyboardShortcut`, `KeyModifiers`, `ShortcutMappings.proposedDefaults`) and result types (`ActionRecord`, `ActionOutcome`, `BlockReason`, `FailureReason`) | `PraxisCore` |
-| Building and posting real keyboard events (`KeyEventBoundary`), checking event-posting access (`EventPostingAccess`), and time (`TimeSource`) | Protocols in `PraxisCore`; production implementations in the app (task 3, CoreGraphics). `SystemTimeSource` ships in the core. |
+| Building and posting real keyboard events (`KeyEventBoundary`), checking event-posting access (`EventPostingAccess`), and time (`TimeSource`) | Protocols in `PraxisCore`; production implementations `CGKeyEventBoundary` and `CGEventPostingAccess` in `PraxisDesktop`. `SystemTimeSource` ships in the core. |
 | Display of state and records, persistence of mappings across launches, the explicit permission setup action | App (task 4). The app never re-implements a guard; every request goes through `perform(_:)`. |
 
 Concurrency model: `SpaceNavigationController` is `@MainActor` and `perform(_:)` is synchronous with no suspension point. The main actor therefore serializes requests, and there is no queue: a request that cannot run now is recorded as blocked and dropped. The `isActionInProgress` guard covers the one remaining way a request can arrive mid-pair, re-entrancy from inside the event boundary's `post` (for example UI code reacting to a posted event). The pair is committed once both events are constructed; disabling execution or losing access between key-down and key-up does not stop the key-up. History is ordered by completion, so a re-entrant blocked request is recorded before the pair that was in progress.
@@ -48,6 +50,27 @@ Scenario to test mapping (`Packages/PraxisCore/Tests/PraxisCoreTests/SpaceNaviga
 
 Interactive parts of SN-001 and SN-008 and all of SN-009 to SN-011 are not covered by these tests.
 
+## macOS event adapter
+
+Established in task 3 (`App/Sources/PraxisDesktop/`). Public CoreGraphics APIs only.
+
+- **Construction.** `CGKeyEventBoundary.makeEvent` calls `CGEvent(keyboardEventSource:virtualKey:keyDown:)` with the configured key code and sets `event.flags` to exactly the configured modifiers (Control → `maskControl`, Option → `maskAlternate`, Shift → `maskShift`, Command → `maskCommand`). A `nil` result throws `KeyEventConstructionError`, which the controller reports as a failed outcome. No standalone modifier events, no retries.
+- **Posting.** `post` hands the event to an injected `Poster`. The default `CGKeyEventBoundary.livePoster` is the only place in Praxis that calls `CGEvent.post(tap:)`. Tests always inject a recording poster, so `scripts/test-app` constructs real events and posts none.
+- **Access.** `CGEventPostingAccess.hasEventPostingAccess()` calls `CGPreflightPostEventAccess()` and nothing else; the controller calls it before every action. `requestEventPostingAccess()` calls `CGRequestPostEventAccess()` and exists only for the explicit setup action (task 4 UI). Both are injectable, so tests verify the wiring without touching the privacy database; one test calls the real preflight, which shows no UI, and does not assert its value.
+
+Decisions pending hardware evidence (SN-009 to SN-011). Change them with findings, not by assumption:
+
+| Decision | Value | Why this first | What could prove it wrong |
+| --- | --- | --- | --- |
+| Event source | `CGEventSource(stateID: .combinedSessionState)` | Apple documents it as the state table reflecting all sources in the login session; the natural choice for a synthesized user shortcut. `nil` is accepted by `CGEvent` as a fallback. | Mission Control ignoring the shortcut, or modifier state bleeding into later real key presses. |
+| Posting location | `.cghidEventTap` | Inserts the event at the HID level so system-level shortcut handling sees it before applications. | If the HID tap requires broader access than event posting, `.cgSessionEventTap` is the fallback. |
+| Modifiers as flags only | `event.flags` on the pair, no modifier key events | Required by the spec (no standalone modifier events). | Apple's `CGEvent(keyboardEventSource:...)` documentation example produces a character by posting separate Shift key-down/up events. If Mission Control requires physical modifier events, SN-009 fails and the spec constraint must be revisited with that evidence. |
+| Non-modifier flag bits cleared | `event.flags` is replaced, not merged, so bits CoreGraphics adds at creation (for arrow keys typically `maskSecondaryFn` and `maskNumericPad`, plus `maskNonCoalesced`) are dropped | Keeps the posted flags exactly the configured set and testable. | If the shortcut matcher expects the auxiliary arrow-key bits, SN-009 fails for this reason rather than the flags-only one; merging the creation-time bits with the configured modifiers is the fallback. |
+
+What the automated adapter tests cannot establish: that `CGEvent.post(tap:)` is accepted by the system, that Mission Control reacts to a flags-only pair, that a Space actually changes, how the preflight behaves after revocation on this macOS version, whether the ad-hoc signature causes re-prompts after rebuilds, or the pacing between consecutive pairs. Those are SN-009 to SN-011.
+
+Apple documentation consulted on 2026-09-09 (developer.apple.com/documentation/coregraphics): `CGEvent.post(tap:)` "posts the specified event immediately before any event taps instantiated for that location" (macOS 10.4+); `CGEvent(keyboardEventSource:virtualKey:keyDown:)` returns `nil` if the event could not be created (macOS 10.4+); `CGPreflightPostEventAccess()` and `CGRequestPostEventAccess()` return `Bool` (macOS 10.15+); `CGEventSourceStateID.combinedSessionState` as described above.
+
 ## Toolchain
 
 Decision: build with Swift Package Manager. The Command Line Tools are sufficient; full Xcode also works and is selected per command. No Xcode project is present or required.
@@ -66,9 +89,9 @@ Inspected on 2026-09-08 (development Mac; Xcode was installed later the same day
 Consequences:
 
 - `swift build` and `swift test` work with the Command Line Tools alone. `xcodebuild` is available only through Xcode and nothing depends on it.
-- Swift Testing ships with the Command Line Tools at `<developer dir>/Library/Developer/Frameworks/Testing.framework` plus `<developer dir>/Library/Developer/usr/lib/lib_TestingInterop.dylib`, but SwiftPM 6.3.3 does not add those paths. `scripts/test-core` adds them explicitly when the developer directory has no `Platforms/` folder (the marker of full Xcode). XCTest is not available with the Command Line Tools; tests use Swift Testing only.
+- Swift Testing ships with the Command Line Tools at `<developer dir>/Library/Developer/Frameworks/Testing.framework` plus `<developer dir>/Library/Developer/usr/lib/lib_TestingInterop.dylib`, but SwiftPM 6.3.3 does not add those paths. `praxis_swift_test_args` in `scripts/lib/toolchain.sh`, used by both `scripts/test-core` and `scripts/test-app`, adds them explicitly when the developer directory has no `Platforms/` folder (the marker of full Xcode). XCTest is not available with the Command Line Tools; tests use Swift Testing only.
 - Requirements enforced by `scripts/lib/toolchain.sh`: Swift 6.2 or newer and macOS SDK 26 or newer. The manifests declare `swift-tools-version: 6.2` because `.macOS(.v26)` is annotated `@available(_PackageDescription 6.2)` in the installed PackageDescription swiftinterface. Missing prerequisites fail with a named cause.
-- `PRAXIS_DEVELOPER_DIR` selects a developer directory for one command without changing the machine-wide `xcode-select` selection. Verified on 2026-09-08: `scripts/check` passes with the default Command Line Tools and with `PRAXIS_DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`; the Xcode path exercises the branch of `scripts/test-core` that lets SwiftPM find Swift Testing itself.
+- `PRAXIS_DEVELOPER_DIR` selects a developer directory for one command without changing the machine-wide `xcode-select` selection. Verified on 2026-09-08: `scripts/check` passes with the default Command Line Tools and with `PRAXIS_DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`; the Xcode path exercises the branch of `praxis_swift_test_args` that lets SwiftPM find Swift Testing itself (re-verified 2026-09-09 with `scripts/test-app` included).
 - An Xcode project can be added later if a feature needs it (asset catalogs, entitlements UI, Instruments templates). Until then the SwiftPM path is the reference build.
 
 ## Minimum macOS version
@@ -83,7 +106,7 @@ Decision: `CFBundleIdentifier` is `com.villetakanen.praxis`. `scripts/build-app`
 
 Rationale: reverse-DNS on the author's personal domain, independent of the repository name (`ixis` today, `Praxis` as product name) so a repository rename does not change the identity macOS uses for privacy permissions. Assumption: the author controls `villetakanen.com`; if not, change this once before any permission evidence is gathered, because permission grants are keyed to identity.
 
-Other bundle facts: `CFBundleName`/`CFBundleDisplayName` `Praxis`; `LSUIElement` true (menu bar app, no Dock icon); `NSPrincipalClass` `NSApplication`; no entitlements and no App Sandbox. Assumption to verify in task 3: posting keyboard events to other applications requires an unsandboxed app plus the event-posting privacy grant.
+Other bundle facts: `CFBundleName`/`CFBundleDisplayName` `Praxis`; `LSUIElement` true (menu bar app, no Dock icon); `NSPrincipalClass` `NSApplication`; no entitlements and no App Sandbox. Assumption to verify in SN-009 and SN-010: posting keyboard events to other applications requires an unsandboxed app plus the event-posting privacy grant.
 
 ## Signing
 
@@ -99,12 +122,13 @@ Expected consequence to verify during permission work (tasks 3 and 5): macOS tie
 
 | Command | Does | Fails when |
 | --- | --- | --- |
-| `scripts/check` | Runs `scripts/test-core`, then `scripts/build-app`. | Any test fails, the build fails, or a toolchain prerequisite is missing. |
+| `scripts/check` | Runs `scripts/test-core`, `scripts/test-app`, then `scripts/build-app`. | Any test fails, the build fails, or a toolchain prerequisite is missing. |
 | `scripts/test-core` | `swift test` on `Packages/PraxisCore` with Swift Testing. | Tests fail or Swift Testing cannot be located. |
+| `scripts/test-app` | `swift test` on `App` (`PraxisDesktopTests`). Constructs real CoreGraphics events, posts none, requests no permission. | Tests fail or Swift Testing cannot be located. |
 | `scripts/build-app` | `swift build` on `App/`, assembles and ad-hoc signs `build/debug/Praxis.app`, prints identity, version, and signature. `PRAXIS_CONFIGURATION=release` for a release build. | Build fails, `Info.plist` identity drifts, or signing/verification fails. |
 | `scripts/run-app` | Builds, quits a running Praxis, launches the bundle with `open`. | As `build-app`. |
 
-`scripts/check` proves compilation, unit behavior, and bundle assembly. It does not prove that the menu bar item appears, that the debug window opens, that permissions work, or that any Space changes. Those are interactive macOS evidence and are recorded separately.
+`scripts/check` proves compilation, unit and adapter behavior up to the posting boundary, and bundle assembly. It does not prove that the menu bar item appears, that the debug window opens, that permissions work, that a posted event is accepted by macOS, or that any Space changes. Those are interactive macOS evidence and are recorded separately.
 
 ## Verified API availability
 
@@ -117,9 +141,12 @@ Checked against the installed macOS 26.5 SDK on 2026-09-08:
 | `Scene.defaultLaunchBehavior`, `Scene.restorationBehavior` | macOS 15.0+ | SwiftUI swiftinterface |
 | `NSApplication.activate()` | macOS 14.0+ | `AppKit/NSApplication.h` line 231 |
 | `CGPreflightPostEventAccess`, `CGRequestPostEventAccess` | macOS 10.15+ | `CoreGraphics/CGEvent.h` lines 405 and 408 |
-| `CGEventPost` | macOS 10.4+ | `CoreGraphics/CGEvent.h` line 353 |
+| `CGEventPost` (`CGEvent.post(tap:)`) | macOS 10.4+ | `CoreGraphics/CGEvent.h` line 353 |
+| `CGEventCreateKeyboardEvent` (`CGEvent(keyboardEventSource:virtualKey:keyDown:)`) | macOS 10.4+ | `CoreGraphics/CGEvent.h` line 79 |
+| `CGEventSetFlags`, `CGEventGetIntegerValueField`, `kCGKeyboardEventKeycode` | present | `CoreGraphics/CGEvent.h` lines 182 and 211, `CGEventTypes.h` line 182 |
+| `CGEventTapLocation` (`kCGHIDEventTap`, `kCGSessionEventTap`, `kCGAnnotatedSessionEventTap`) | present | `CoreGraphics/CGEventTypes.h` line 402 |
 
-Presence in the SDK is not evidence that posting a shortcut changes a Space; that is what SN-009 through SN-011 measure.
+Presence in the SDK is not evidence that posting a shortcut changes a Space; that is what SN-009 through SN-011 measure. Posting is now implemented but has never been exercised outside the recording poster.
 
 ## Not decided
 

@@ -61,3 +61,29 @@ praxis_select_toolchain() {
     echo "swift:     $swift_version_line"
     echo "sdk:       macOS $sdk_version"
 }
+
+# Sets PRAXIS_SWIFT_TEST_ARGS to the extra `swift test` arguments this
+# toolchain needs to locate Swift Testing. With full Xcode (a Platforms/ folder
+# in the developer directory) SwiftPM finds it alone. With the Command Line
+# Tools only, the framework ships at <developer dir>/Library/Developer/Frameworks
+# but SwiftPM 6.3 does not add that path, so we pass it explicitly.
+# (No bash 4 features: macOS /bin/bash is 3.2.)
+PRAXIS_SWIFT_TEST_ARGS=()
+praxis_swift_test_args() {
+    PRAXIS_SWIFT_TEST_ARGS=()
+    local developer_dir
+    developer_dir="$(xcode-select -p)"
+    [[ -d "$developer_dir/Platforms" ]] && return 0
+    local frameworks_dir="$developer_dir/Library/Developer/Frameworks"
+    local interop_dir="$developer_dir/Library/Developer/usr/lib"
+    [[ -d "$frameworks_dir/Testing.framework" ]] \
+        || fail "Swift Testing not found at $frameworks_dir/Testing.framework. Install a newer Command Line Tools or Xcode, or set PRAXIS_DEVELOPER_DIR."
+    [[ -f "$interop_dir/lib_TestingInterop.dylib" ]] \
+        || fail "lib_TestingInterop.dylib not found at $interop_dir. The Command Line Tools layout differs from the one this script expects."
+    PRAXIS_SWIFT_TEST_ARGS=(
+        -Xswiftc "-F$frameworks_dir"
+        -Xlinker "-F$frameworks_dir"
+        -Xlinker -rpath -Xlinker "$frameworks_dir"
+        -Xlinker -rpath -Xlinker "$interop_dir"
+    )
+}

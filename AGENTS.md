@@ -21,10 +21,11 @@ Follow existing user authorization for Git and publication actions. A critic ver
 
 ## Verification
 
-- `scripts/check`: runs the PraxisCore tests and builds `build/debug/Praxis.app`. Fails with a named cause when Swift 6.2+ or the macOS 26 SDK is missing.
+- `scripts/check`: runs the PraxisCore and PraxisDesktop tests and builds `build/debug/Praxis.app`. Fails with a named cause when Swift 6.2+ or the macOS 26 SDK is missing.
 - `scripts/test-core`: PraxisCore tests only (Swift Testing). Pass `--filter <name>` to narrow.
+- `scripts/test-app`: PraxisDesktop adapter tests. They build real CoreGraphics events but post only to a recording poster and never request permissions.
 - `scripts/build-app`: builds and ad-hoc signs the app bundle, printing its path, identifier, and version.
 - `scripts/run-app`: builds and launches the bundle. Observing the menu bar item and debug window is interactive macOS evidence, not part of `scripts/check`.
 - Documentation changes: check links and `git diff --check`.
 
-The Command Line Tools are sufficient; Xcode 26.6 is also installed and usable per command via `PRAXIS_DEVELOPER_DIR`, and `xcodebuild` is not used. `scripts/test-app` and `scripts/acceptance` do not exist yet; never report a proposed command as executed. A passing `scripts/check` says nothing about permissions or desktop effects.
+The Command Line Tools are sufficient; Xcode 26.6 is also installed and usable per command via `PRAXIS_DEVELOPER_DIR`, and `xcodebuild` is not used. `scripts/acceptance` does not exist yet; never report a proposed command as executed. A passing `scripts/check` says nothing about permissions or desktop effects.

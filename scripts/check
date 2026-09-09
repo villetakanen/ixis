@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Deterministic checks: core tests, then the native app build.
+# Deterministic checks: core tests, app/adapter tests, then the native app build.
 # Fails clearly when the toolchain prerequisites are missing.
 source "$(dirname "$0")/lib/toolchain.sh"
 
 "$REPO_ROOT/scripts/test-core"
+"$REPO_ROOT/scripts/test-app"
 "$REPO_ROOT/scripts/build-app"
 
 echo
-echo "check: OK (PraxisCore tests passed, Praxis.app built)"
-echo "Not covered: launching the app, menu bar behavior, permissions, or any desktop effect."
+echo "check: OK (PraxisCore tests passed, PraxisDesktop tests passed, Praxis.app built)"
+echo "Not covered: launching the app, menu bar behavior, real permissions, live event posting, or any desktop effect."
