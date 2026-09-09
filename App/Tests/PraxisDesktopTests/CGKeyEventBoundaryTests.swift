@@ -25,6 +25,28 @@ extension CGEvent {
 @MainActor
 @Suite("CGKeyEventBoundary construction")
 struct ConstructionTests {
+    @Test("modifier main keys are rejected for both requested event phases",
+          arguments: [UInt16(0x38), UInt16(0x3B)], KeyEventPhase.allCases)
+    func rejectsModifierEventTypes(keyCode: UInt16, phase: KeyEventPhase) {
+        let recorder = RecordingPoster()
+        let boundary = recorder.makeBoundary()
+        let spec = KeyEventSpec(phase: phase, shortcut: KeyboardShortcut(keyCode: keyCode, modifiers: []))
+        do {
+            _ = try boundary.makeEvent(spec)
+            Issue.record("expected modifier main key to fail construction")
+        } catch let error as KeyEventConstructionError {
+            #expect(error.spec == spec)
+            guard case .unexpectedEventType(let type) = error.reason else {
+                Issue.record("expected event-type rejection, got \(error)")
+                return
+            }
+            #expect(type == CGEventType.flagsChanged.rawValue)
+        } catch {
+            Issue.record("unexpected error: \(error)")
+        }
+        #expect(recorder.posted.isEmpty)
+    }
+
     @Test("key-down and key-up carry the requested type, key code, and exactly the configured modifiers",
           arguments: [
             KeyboardShortcut(keyCode: 0x7B, modifiers: .control),
@@ -110,6 +132,36 @@ struct PostingTests {
 @MainActor
 @Suite("Controller with the production event boundary")
 struct IntegrationTests {
+    @Test("modifier main keys fail without posting, and corrected mappings work on a fresh request",
+          arguments: [UInt16(0x38), UInt16(0x3B)], DesktopIntent.allCases)
+    func modifierMainKeyFailsAtomically(keyCode: UInt16, intent: DesktopIntent) {
+        let recorder = RecordingPoster()
+        var mappings = ShortcutMappings.proposedDefaults
+        mappings[intent] = KeyboardShortcut(keyCode: keyCode, modifiers: .control)
+        let controller = SpaceNavigationController(
+            events: recorder.makeBoundary(), access: ScriptedAccess(),
+            time: SystemTimeSource(), mappings: mappings
+        )
+        controller.setExecutionEnabled(true)
+        controller.confirmShortcuts()
+        let record = controller.perform(intent)
+        guard case .failed(.eventConstructionFailed(phase: .keyDown, detail: let detail)) = record.outcome else {
+            Issue.record("expected construction failure, got \(record.outcome)")
+            return
+        }
+        #expect(detail.contains("Choose a non-modifier key"))
+        #expect(recorder.posted.isEmpty)
+        #expect(controller.latestRecord == record)
+        #expect(!controller.isActionInProgress)
+
+        controller.updateMappings(.proposedDefaults)
+        controller.confirmShortcuts()
+        #expect(recorder.posted.isEmpty)
+        #expect(controller.perform(intent).outcome == .posted)
+        #expect(recorder.posted.map(\.event.type) == [.keyDown, .keyUp])
+        #expect(recorder.posted.allSatisfy { $0.event.keyCode == ShortcutMappings.proposedDefaults[intent].keyCode })
+    }
+
     @MainActor
     final class ScriptedAccess: EventPostingAccess {
         var granted = true

@@ -1,11 +1,23 @@
 import CoreGraphics
 import PraxisCore
 
-/// Thrown when CoreGraphics returns no event for a request.
+/// Thrown when CoreGraphics cannot create the requested keyboard event.
 public struct KeyEventConstructionError: Error, CustomStringConvertible, Sendable {
+    public enum Reason: Sendable {
+        case allocationFailed
+        case unexpectedEventType(UInt32)
+    }
+
     public let spec: KeyEventSpec
+    public let reason: Reason
     public var description: String {
-        "CGEvent(keyboardEventSource:virtualKey:keyDown:) returned nil for \(spec.phase) keyCode 0x\(String(spec.shortcut.keyCode, radix: 16))"
+        let key = "keyCode 0x\(String(spec.shortcut.keyCode, radix: 16))"
+        switch reason {
+        case .allocationFailed:
+            return "CGEvent(keyboardEventSource:virtualKey:keyDown:) returned nil for \(spec.phase) \(key)"
+        case .unexpectedEventType(let type):
+            return "Cannot use \(key) as the shortcut's main key: CoreGraphics produced event type \(type) instead of \(spec.phase). Choose a non-modifier key."
+        }
     }
 }
 
@@ -57,7 +69,11 @@ public final class CGKeyEventBoundary: KeyEventBoundary {
             virtualKey: spec.shortcut.keyCode,
             keyDown: spec.phase == .keyDown
         ) else {
-            throw KeyEventConstructionError(spec: spec)
+            throw KeyEventConstructionError(spec: spec, reason: .allocationFailed)
+        }
+        let expectedType: CGEventType = spec.phase == .keyDown ? .keyDown : .keyUp
+        guard event.type == expectedType else {
+            throw KeyEventConstructionError(spec: spec, reason: .unexpectedEventType(event.type.rawValue))
         }
         // Replace, do not merge: the pair carries only the configured modifiers
         // and no standalone modifier events are ever posted.
