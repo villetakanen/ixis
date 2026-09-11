@@ -7,9 +7,9 @@ Status: established for Milestone 0 (the button-driven Space-navigation probe). 
 | Path | Owns | Depends on |
 | --- | --- | --- |
 | `Packages/PraxisCore/` | Semantic layer and the guarded action controller: `DesktopIntent`, `ShortcutMappings`, `ActionRecord`/`ActionOutcome`, `BoundedHistory`, the boundary protocols, and `SpaceNavigationController`. Pure Swift; no AppKit, SwiftUI, or CoreGraphics. | Swift standard library and Foundation (`Date` only) |
-| `App/Sources/PraxisDesktop/` | macOS adapters: `CGKeyEventBoundary` (CoreGraphics event construction and posting) and `CGEventPostingAccess` (preflight and explicit request). Library target so it is testable. | `PraxisCore`, CoreGraphics |
-| `App/Sources/Praxis/` | Executable: menu bar item and debug window. App state wiring arrives in task 4. | `PraxisDesktop`, `PraxisCore`, SwiftUI, AppKit |
-| `App/Tests/PraxisDesktopTests/` | Adapter tests: real `CGEvent` construction, posting order at the boundary, access wiring, controller integration. Never post live input. | |
+| `App/Sources/PraxisDesktop/` | macOS adapters: `CGKeyEventBoundary` (CoreGraphics event construction and posting) and `CGEventPostingAccess` (preflight and explicit request). App state for the probe: `SpaceNavigationProbe`, `ShortcutMappingStore`, `ActionRecordPresentation`, key code field parsing. Library target so it is testable. | `PraxisCore`, CoreGraphics, Foundation, Observation |
+| `App/Sources/Praxis/` | Executable: menu bar item and the debug window (`DebugView`) bound to `ProductionProbe`; the window is presented at launch and reopened from the menu. View code only; no state and no eligibility guard. | `PraxisDesktop`, `PraxisCore`, SwiftUI, AppKit |
+| `App/Tests/PraxisDesktopTests/` | Adapter tests (real `CGEvent` construction, posting order at the boundary, access wiring, controller integration) and probe tests (launch/relaunch state, editor-driven mapping invalidation, request forwarding, access setup, presentation wording and bounds). Never post live input or request access. | |
 | `App/Resources/Info.plist` | Bundle identity and version metadata. | |
 | `scripts/` | The only supported build, test, and launch entry points. | Toolchain below |
 | `build/<configuration>/Praxis.app` | Assembled, ad-hoc signed app bundle (ignored by Git). | `scripts/build-app` |
@@ -25,7 +25,7 @@ Established in task 2. The split between package and app is:
 | Enable flag, mappings, session confirmation and its invalidation, in-progress flag, 50-record history, every eligibility guard, pair construction-before-posting | `SpaceNavigationController` in `PraxisCore` |
 | Shortcut value types (`KeyboardShortcut`, `KeyModifiers`, `ShortcutMappings.proposedDefaults`) and result types (`ActionRecord`, `ActionOutcome`, `BlockReason`, `FailureReason`) | `PraxisCore` |
 | Building and posting real keyboard events (`KeyEventBoundary`), checking event-posting access (`EventPostingAccess`), and time (`TimeSource`) | Protocols in `PraxisCore`; production implementations `CGKeyEventBoundary` and `CGEventPostingAccess` in `PraxisDesktop`. `SystemTimeSource` ships in the core. |
-| Display of state and records, persistence of mappings across launches, the explicit permission setup action | App (task 4). The app never re-implements a guard; every request goes through `perform(_:)`. |
+| Display of state and records, persistence of mappings across launches, the explicit permission setup action, mapping editor text and validation | `SpaceNavigationProbe` in `PraxisDesktop` and `DebugView` in the executable (task 4, see below). Neither re-implements an eligibility guard; every request goes through `perform(_:)`. The probe's only rule of its own is refusing the Confirm setup action while a key code field is invalid. |
 
 Concurrency model: `SpaceNavigationController` is `@MainActor` and `perform(_:)` is synchronous with no suspension point. The main actor therefore serializes requests, and there is no queue: a request that cannot run now is recorded as blocked and dropped. The `isActionInProgress` guard covers the one remaining way a request can arrive mid-pair, re-entrancy from inside the event boundary's `post` (for example UI code reacting to a posted event). The pair is committed once both events are constructed; disabling execution or losing access between key-down and key-up does not stop the key-up. History is ordered by completion, so a re-entrant blocked request is recorded before the pair that was in progress.
 
@@ -70,6 +70,20 @@ Decisions pending hardware evidence (SN-009 to SN-011). Change them with finding
 What the automated adapter tests cannot establish: that `CGEvent.post(tap:)` is accepted by the system, that Mission Control reacts to a flags-only pair, that a Space actually changes, how the preflight behaves after revocation on this macOS version, whether the ad-hoc signature causes re-prompts after rebuilds, or the pacing between consecutive pairs. Those are SN-009 to SN-011.
 
 Apple documentation consulted on 2026-09-09 (developer.apple.com/documentation/coregraphics): `CGEvent.post(tap:)` "posts the specified event immediately before any event taps instantiated for that location" (macOS 10.4+); `CGEvent(keyboardEventSource:virtualKey:keyDown:)` returns `nil` if the event could not be created (macOS 10.4+); `CGPreflightPostEventAccess()` and `CGRequestPostEventAccess()` return `Bool` (macOS 10.15+); `CGEventSourceStateID.combinedSessionState` as described above.
+
+## Debug interface and app state
+
+Established in task 4. `SpaceNavigationProbe<Events>` (`App/Sources/PraxisDesktop/SpaceNavigationProbe.swift`) is a `@MainActor @Observable` class that wraps one `SpaceNavigationController` and exposes mirrors of its state for SwiftUI. `ProductionProbe.production()` is the only place the live `CGKeyEventBoundary`, the real `CGEventPostingAccess`, and the `UserDefaults` mapping store are wired together; `PraxisApp` holds one instance per process, so relaunch starts disabled and unconfirmed by construction.
+
+- **Requests.** `request(_:)` calls `perform(_:)` unconditionally and then refreshes the mirrors and the access snapshot (preflight only). The Previous/Next buttons stay enabled in every state so the controller's reason, not a disabled button, explains a non-posting request.
+- **Mapping editor.** Per direction: one key code text field (`0x7B` hexadecimal or decimal, parsed by `KeyCodeField`) and four modifier checkboxes. A parseable edit is applied through `updateMappings` at once and saved to the store; the controller decides whether it is a change, so retyping the same value keeps the confirmation. An unparseable key code shows an error, leaves the last valid mapping in force, ignores modifier toggles for that direction, and blocks the Confirm button until fixed, so the editor never shows modifiers that differ from the mapping in force. No general settings framework.
+- **Confirmation and access.** Confirm is the user's assertion for the session; the window explains that System Settings changes require rechecking here. `requestAccess()` calls `CGRequestPostEventAccess()` once per press; `recheckAccess()` preflights. Neither is reachable from a navigation request. The shown access status is a snapshot with its check time; the controller still checks live before each action.
+- **Records.** `ActionRecordPresentation` produces the wording: `Shortcut posted`, `Blocked`, or `Failed`; a reason sentence for every outcome; the core's recovery action for blocked/failed; elapsed processing time in milliseconds. The posted reason says Praxis does not observe whether a transition followed. The window shows the latest record and the newest 50, newest first.
+- **Persistence.** Only `ShortcutMappings` (JSON in `UserDefaults` key `praxis.spaceNavigation.shortcutMappings`). Undecodable data falls back to the proposed defaults. The store reads and writes through a two-method `KeyedDataStore` protocol that `UserDefaults` conforms to, so tests use a dictionary and leave no preference files behind. Enablement, confirmation, access status, and history are never stored.
+
+Probe tests (`App/Tests/PraxisDesktopTests/SpaceNavigationProbeTests.swift`) run over the production `CGKeyEventBoundary` with a recording poster, a scripted access double, and an in-memory store. They cover SN-001 launch/relaunch state, SN-002 editor-driven invalidation, forwarding of the three externally reachable block reasons (in-progress is reachable only by re-entrancy and stays in the core tests), the explicit access actions, and SN-008 wording and bounds. They do not show that SwiftUI renders the bindings, that the menu bar item appears, or that any label reads as intended on screen; that is interactive observation.
+
+Known limitation for hardware testing: the debug window lives on the Space it was opened in, so after a successful transition the tester must return to that Space (or reopen the window from the menu bar, which activates the app) before the next request. The spec asks for this to be recorded as a finding in SN-009 rather than worked around ahead of evidence.
 
 ## Toolchain
 
@@ -124,9 +138,9 @@ Expected consequence to verify during permission work (tasks 3 and 5): macOS tie
 | --- | --- | --- |
 | `scripts/check` | Runs `scripts/test-core`, `scripts/test-app`, then `scripts/build-app`. | Any test fails, the build fails, or a toolchain prerequisite is missing. |
 | `scripts/test-core` | `swift test` on `Packages/PraxisCore` with Swift Testing. | Tests fail or Swift Testing cannot be located. |
-| `scripts/test-app` | `swift test` on `App` (`PraxisDesktopTests`). Constructs real CoreGraphics events, posts none, requests no permission. | Tests fail or Swift Testing cannot be located. |
+| `scripts/test-app` | `swift test` on `App` (`PraxisDesktopTests`: adapter and probe tests). Constructs real CoreGraphics events, posts none, requests no permission. | Tests fail or Swift Testing cannot be located. |
 | `scripts/build-app` | `swift build` on `App/`, assembles and ad-hoc signs `build/debug/Praxis.app`, prints identity, version, and signature. `PRAXIS_CONFIGURATION=release` for a release build. | Build fails, `Info.plist` identity drifts, or signing/verification fails. |
-| `scripts/run-app` | Builds, quits a running Praxis, launches the bundle with `open`. | As `build-app`. |
+| `scripts/run-app` | Builds, quits a running Praxis, launches the bundle with `open`. The debug window appears and takes focus. | As `build-app`. |
 
 `scripts/check` proves compilation, unit and adapter behavior up to the posting boundary, and bundle assembly. It does not prove that the menu bar item appears, that the debug window opens, that permissions work, that a posted event is accepted by macOS, or that any Space changes. Those are interactive macOS evidence and are recorded separately.
 
@@ -146,7 +160,7 @@ Checked against the installed macOS 26.5 SDK on 2026-09-08:
 | `CGEventSetFlags`, `CGEventGetIntegerValueField`, `kCGKeyboardEventKeycode` | present | `CoreGraphics/CGEvent.h` lines 182 and 211, `CGEventTypes.h` line 182 |
 | `CGEventTapLocation` (`kCGHIDEventTap`, `kCGSessionEventTap`, `kCGAnnotatedSessionEventTap`) | present | `CoreGraphics/CGEventTypes.h` line 402 |
 
-Presence in the SDK is not evidence that posting a shortcut changes a Space; that is what SN-009 through SN-011 measure. Posting is now implemented but has never been exercised outside the recording poster.
+Presence in the SDK is not evidence that posting a shortcut changes a Space; that is what SN-009 through SN-011 measure. Posting is implemented and reachable from the debug window, but automated checks exercise it only through the recording poster.
 
 ## Not decided
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build Praxis and launch the assembled app bundle. The app runs as a menu bar
-# item (no Dock icon); open the debug window from its menu.
+# item (no Dock icon). The debug window opens at launch and activates the app;
+# the menu bar item reopens it if closed.
 #
 # A running Praxis is asked to quit first, and the launch proceeds only once its
 # termination is confirmed, so the launched process is always the fresh build.
