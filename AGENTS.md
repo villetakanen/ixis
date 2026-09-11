@@ -5,7 +5,7 @@ Praxis routes human attention between agents through hands and voice. Read [VISI
 ## Context
 
 - Read the relevant `specs/<capability>/spec.md` before implementation. [Spec template](specs/TEMPLATE.md).
-- [Scaffold plan](plans/initial-scaffold.md) gives the implementation sequence.
+- [Scaffold plan](plans/initial-scaffold.md) gives the implementation sequence. [ARCHITECTURE.md](ARCHITECTURE.md) records the established layout, toolchain, bundle identity, and signing decisions.
 - [Project workflow](plans/project-workflow.md) defines spec, development, test, and agent handoffs. Its version/release policy remains proposed until distribution work begins.
 - Use GitHub issues for bounded implementation work; specs own lasting behavior, issues own the change.
 
@@ -21,4 +21,11 @@ Follow existing user authorization for Git and publication actions. A critic ver
 
 ## Verification
 
-This repository currently contains planning and specifications only. Build, test, and acceptance scripts are not implemented. Check documentation links and `git diff --check` for documentation changes. Add real commands here when the app/package scaffold exists; never report a proposed command as executed.
+- `scripts/check`: runs the PraxisCore and PraxisDesktop tests and builds `build/debug/Praxis.app`. Fails with a named cause when Swift 6.2+ or the macOS 26 SDK is missing.
+- `scripts/test-core`: PraxisCore tests only (Swift Testing). Pass `--filter <name>` to narrow.
+- `scripts/test-app`: PraxisDesktop adapter and app-state (`SpaceNavigationProbe`) tests. They build real CoreGraphics events but post only to a recording poster and never request permissions.
+- `scripts/build-app`: builds and ad-hoc signs the app bundle, printing its path, identifier, and version.
+- `scripts/run-app`: builds and launches the bundle. Observing the menu bar item and debug window is interactive macOS evidence, not part of `scripts/check`.
+- Documentation changes: check links and `git diff --check`.
+
+The Command Line Tools are sufficient; Xcode 26.6 is also installed and usable per command via `PRAXIS_DEVELOPER_DIR`, and `xcodebuild` is not used. `scripts/acceptance` does not exist yet; never report a proposed command as executed. A passing `scripts/check` says nothing about permissions or desktop effects.

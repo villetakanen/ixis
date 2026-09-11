@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Build Praxis and launch the assembled app bundle. The app runs as a menu bar
+# item (no Dock icon). The debug window opens at launch and activates the app;
+# the menu bar item reopens it if closed.
+#
+# A running Praxis is asked to quit first, and the launch proceeds only once its
+# termination is confirmed, so the launched process is always the fresh build.
+source "$(dirname "$0")/lib/toolchain.sh"
+
+"$REPO_ROOT/scripts/build-app"
+
+configuration="${PRAXIS_CONFIGURATION:-debug}"
+app_dir="$REPO_ROOT/build/$configuration/Praxis.app"
+
+# Prints 0 when Praxis is running, 1 when it is not; fails on inspection errors.
+praxis_running() {
+    local status=0
+    pgrep -xq Praxis || status=$?
+    case "$status" in
+        0) return 0 ;;
+        1) return 1 ;;
+        *) fail "could not inspect running processes (pgrep exit $status)." ;;
+    esac
+}
+
+if praxis_running; then
+    echo "== Praxis is already running; quitting it before relaunch"
+    osascript -e "tell application id \"$PRAXIS_BUNDLE_ID\" to quit" >/dev/null 2>&1 \
+        || pkill -x Praxis \
+        || fail "could not ask the running Praxis to quit."
+    for _ in $(seq 1 20); do
+        praxis_running || break
+        sleep 0.5
+    done
+    if praxis_running; then
+        fail "Praxis is still running (pid $(pgrep -x Praxis | tr '\n' ' ')) after 10 seconds; quit it manually, then rerun."
+    fi
+    echo "== previous Praxis terminated"
+fi
+
+echo "== Launch $app_dir"
+open "$app_dir"

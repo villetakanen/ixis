@@ -1,8 +1,8 @@
 # Initial scaffold
 
-Status: proposed implementation plan
+Status: implementation plan; Milestone 0 scaffold in progress (see [ARCHITECTURE.md](../ARCHITECTURE.md))
 
-The product intent lives in [VISION.md](../VISION.md). This plan narrows the first implementation to its Space-switching milestone.
+The product intent lives in [VISION.md](../VISION.md). This plan narrows the first implementation to its Space-switching milestone. Milestone 0 is the button-driven probe of the Space-navigation action path ([spec](../specs/space-navigation/spec.md)); the camera-to-swipe slice remains the first gesture milestone and reuses the same intent and adapter boundary.
 
 ## Structure
 
@@ -12,10 +12,10 @@ The product intent lives in [VISION.md](../VISION.md). This plan narrows the fir
 
 ## Build sequence
 
-1. App shell and buttons that dispatch previous/next Space intents through configured keyboard shortcuts. Verify permissions and actual desktop behavior before introducing recognition.
-2. Camera capture and Vision hand landmarks. Keep processing bounded, discard stale frames, and keep UI work on the main actor.
-3. Temporal swipe recognition with debug intent history. Test cancellation, lost tracking, cooldown, and ordinary non-command movement.
-4. Explicitly enabled desktop execution. Measure misses, accidental actions, and capture-to-action latency in real use.
+0. Milestone 0, button probe: app shell and buttons that dispatch previous/next Space intents through configured keyboard shortcuts. Verify permissions and actual desktop behavior before introducing recognition. The enablement, shortcut confirmation, and permission guards built here belong to the adapter and remain the only path to a posted event.
+1. First gesture milestone: camera capture and Vision hand landmarks. Keep processing bounded, discard stale frames, and keep UI work on the main actor.
+2. Temporal swipe recognition with debug intent history. Test cancellation, lost tracking, cooldown, and ordinary non-command movement.
+3. Gesture-driven execution: recognized swipes emit the same intents as the buttons and connect to the existing adapter, whose enablement guards already exist; no second execution path. Measure misses, accidental actions, and capture-to-action latency in real use.
 
 ## Boundaries and evidence
 
@@ -27,9 +27,9 @@ The product intent lives in [VISION.md](../VISION.md). This plan narrows the fir
 - Use deterministic gesture traces for automated tests and real macOS sessions for integration evidence.
 - Focusing a window does not prove that its text input is focused. Investigate this before the speech milestone.
 
-## Toolchain prerequisite
+## Toolchain
 
-At initial inspection, Swift 6.3.3 is available and `xcode-select` points to Command Line Tools. No Xcode app matched `/Applications/Xcode*.app`. Establish the full Xcode toolchain before building the native app target; the pure Swift package can be developed separately.
+Swift 6.3.3 and the macOS 26.5 SDK are available through the Command Line Tools, and Xcode 26.6 is installed alongside them. The app and core package build and test with Swift Package Manager alone on either toolchain, and `scripts/build-app` assembles the bundle. Decisions and their rationale are in [ARCHITECTURE.md](../ARCHITECTURE.md); an Xcode project is not required for Milestone 0.
 
 ## API starting points
 

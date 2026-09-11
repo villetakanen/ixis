@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Run the pure Swift PraxisCore tests (Swift Testing). Extra arguments go to
+# `swift test` (for example: scripts/test-core --filter BoundedHistory).
+source "$(dirname "$0")/lib/toolchain.sh"
+
+praxis_select_toolchain
+praxis_swift_test_args
+
+echo "== PraxisCore tests"
+exec xcrun swift test --package-path "$REPO_ROOT/Packages/PraxisCore" \
+    --disable-xctest --enable-swift-testing ${PRAXIS_SWIFT_TEST_ARGS[@]+"${PRAXIS_SWIFT_TEST_ARGS[@]}"} "$@"

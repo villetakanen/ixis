@@ -1,7 +1,7 @@
 ---
 title: Space navigation
 status: active
-implementation: not-started
+implementation: partial
 verification: not-run
 ---
 
@@ -17,12 +17,12 @@ Scope: app shell, explicit action enablement, shortcut setup, event-posting perm
 
 ### Architecture
 
-Proposed ownership; source paths will be recorded when the scaffold exists:
+Established ownership (source paths as of task 4; boundaries detailed in [ARCHITECTURE.md](../../ARCHITECTURE.md)):
 
-- Pure Swift package: `DesktopIntent.previousSpace` and `.nextSpace`, plus value types for action outcomes. No AppKit or CoreGraphics dependency.
-- Native app: a menu bar entry opens a debug window. The window supplies explicit navigation buttons and action status.
-- Desktop adapter: consumes an intent and the verified shortcut mapping, checks eligibility, constructs and posts keyboard events using public CoreGraphics APIs.
-- App state: owns the enable flag, session shortcut confirmation, permission snapshot, and recent action results. UI state is main-actor isolated; actions are serialized with no deferred navigation queue.
+- Pure Swift package `Packages/PraxisCore/`: `DesktopIntent.previousSpace` and `.nextSpace`, shortcut and outcome value types, and `SpaceNavigationController`, which owns the enable flag, mappings, session confirmation, every eligibility guard, pair construction before posting, and the bounded history. No AppKit or CoreGraphics dependency.
+- Native app `App/Sources/Praxis/`: `PraxisApp` puts the menu bar entry up, presents the debug window at launch (the menu bar icon can be hidden on a full menu bar), and reopens it from the menu; `DebugView` supplies the navigation buttons, execution switch, mapping editor, confirmation, permission status and setup actions, and the result display. The view adds no eligibility logic.
+- Desktop adapter `App/Sources/PraxisDesktop/`: `CGKeyEventBoundary` constructs and posts keyboard events with public CoreGraphics APIs; `CGEventPostingAccess` preflights and, only from the explicit setup action, requests event-posting access.
+- App state `App/Sources/PraxisDesktop/SpaceNavigationProbe.swift`: main-actor `SpaceNavigationProbe` forwards every request to the controller and owns the mapping editor drafts, mapping persistence across launches (`UserDefaults`; enablement and confirmation are never stored), the permission snapshot, and observable mirrors of controller state. Actions are serialized on the main actor with no deferred navigation queue.
 
 The shortcut mapping contains a key code and modifier set for each direction. Display the proposed Control–Left/Right defaults, but require the user to confirm they match enabled Mission Control shortcuts before execution. Provide a minimal way to enter a different mapping when defaults do not match. No automatic reading of undocumented system shortcut stores or changes to system settings.
 
@@ -51,7 +51,7 @@ Show the latest result and a bounded history of 50 records with the oldest disca
 
 ### Definition of done
 
-- [ ] Menu bar app opens the debug window, launches with actions disabled, and reports setup status (SN-001).
+- [ ] The app opens the debug window at launch, the menu bar item reopens it, execution launches disabled, and setup status is reported (SN-001).
 - [ ] Eligibility failures produce visible reasons and zero posts; recovery requires a fresh request (SN-002–004).
 - [ ] Direction routing, paired events, failure atomicity, and request serialization are verified automatically (SN-005–007).
 - [ ] Debug results distinguish attempted input from observed effects and expose bounded history (SN-008).
@@ -67,7 +67,7 @@ Unconfirmed or disabled control produces no keyboard input. No deferred action e
 
 Evidence: automated app-state checks and interactive macOS.
 
-Given a newly launched app, when the user opens Debug from the menu bar, then Previous/Next controls, the disabled execution state, shortcut confirmation state, and permission status are visible. Relaunch resets enablement and confirmation, even after a previous enabled session.
+Given a newly launched app, the debug window opens and the app activates without requiring access to the menu bar icon. Previous/Next controls, the disabled execution state, shortcut confirmation state, and permission status are visible. The menu bar command can reopen the debug window after it is closed. Relaunch resets enablement and confirmation, even after a previous enabled session.
 
 #### SN-002: Disabled or unconfirmed
 
@@ -131,7 +131,7 @@ Given a first/last Space, a full-screen Space, or multiple displays, when each d
 
 ## Evidence
 
-All scenarios are not run; there is no implementation. Independent spec review evaluates clarity and verifiability only.
+Implementation is partial: the Milestone 0 scaffold exists (menu bar app, debug window, `scripts/check`), and `SpaceNavigationController` in `PraxisCore` implements enablement, shortcut confirmation and invalidation, access checks, pair construction, serialization, and the bounded history against injected boundaries. SN-002 to SN-007 and the state/history parts of SN-001 and SN-008 pass as automated tests (`scripts/test-core`; mapping in [ARCHITECTURE.md](../../ARCHITECTURE.md)). The CoreGraphics adapter exists (`App/Sources/PraxisDesktop/`): `CGKeyEventBoundary` builds each event the controller pairs and posts via `CGEvent.post(tap:)`, and `CGEventPostingAccess` wraps the preflight and the explicit request. The debug window is wired to production state through `SpaceNavigationProbe` (task 4): Previous/Next buttons, execution switch, key code and modifier editor per direction, session confirmation, permission status with request and recheck actions, latest result, and the newest 50 records with direction, outcome, reason, recovery action, and processing duration. `scripts/test-app` verifies constructed event fields, posting order, access wiring, and the app-state portions of SN-001 and SN-008 (launch and relaunch state, mapping invalidation from the editor, record presentation wording and bounds) against a recording poster; it never posts live input or requests access. The debug window is presented at launch and reopened from the menu bar item; this launch behavior and the labels have not been observed by an automated session (screen capture and menu driving were unavailable), so the interactive halves of SN-001 and SN-008 remain human evidence to collect. No event has been posted to macOS by a human-driven request yet, so SN-009 to SN-011 have no evidence. Independent spec review evaluates clarity and verifiability only.
 
 For the first hardware run, create `docs/experiments/space-navigation.md` with source SHA, app identity/build, launch path, toolchain, macOS/hardware, display/Space layout, shortcuts, scenario outcomes, and repeat counts. Use 10 deliberate attempts per direction from a valid middle Space for SN-009; record wrong, missed, and duplicate transitions. Passing this probe requires all 20 attempts to produce exactly one transition in the requested direction. This is a baseline protocol, not a statistical reliability claim.
 
@@ -139,7 +139,7 @@ SN-009 and SN-010 must pass on the initial supported development configuration b
 
 ## Open questions
 
-- Minimum macOS version, stable bundle identity, and signing setup: resolve during app scaffolding before hardware permission evidence is gathered.
+- Minimum macOS version (26.0), bundle identity (`com.villetakanen.praxis`), and signing (ad hoc, no identity) are decided in [ARCHITECTURE.md](../../ARCHITECTURE.md). Still open: whether ad-hoc signing forces re-granting event-posting access after each rebuild; resolve during SN-010.
 - Posting location/event-source behavior and any OS-specific limitations: resolve through SN-009–011 using public APIs; revise this spec with findings if the mechanism fails.
 - Space-transition pacing and future gesture cooldown: measure during the probe and later gesture work. This slice does not guarantee that rapid sequential posts each produce a transition.
 
